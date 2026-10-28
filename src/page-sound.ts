@@ -1,53 +1,52 @@
-/** A quiet, rounded paper swish, generated locally without audio downloads. */
+/** Play the supplied page-turn recording, preloaded from this site's own assets. */
 let context: AudioContext | undefined;
-let paper: AudioBuffer | undefined;
+let recording: Promise<AudioBuffer | null> | undefined;
+let active: { source: AudioBufferSourceNode; gain: GainNode } | undefined;
+let requestedTurn = 0;
+
+// Begin downloading before the first gesture so touch/drag playback starts promptly.
+const file = fetch(`${import.meta.env.BASE_URL}audio/page-flip.mp3`)
+  .then(response => {
+    if (!response.ok) throw new Error('Page-turn audio unavailable');
+    return response.arrayBuffer();
+  })
+  .catch(() => null);
 
 export function unlockPageSound() {
   try {
     context ??= new AudioContext();
-    if (context.state === 'suspended') void context.resume().catch(() => {});
-    if (paper) return;
-    const duration = .72;
-    paper = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
-    const samples = paper.getChannelData(0);
-    let smoothed = 0;
-    // Sample-rate-independent colored noise avoids the old sharp, static-like hiss.
-    const smoothing = Math.exp(-2 * Math.PI * 850 / context.sampleRate);
-    for (let i = 0; i < samples.length; i++) {
-      const time = i / context.sampleRate;
-      smoothed = smoothed * smoothing + (Math.random() * 2 - 1) * (1 - smoothing);
-      // One gentle swell with a long, silent-ended release; no rapid flutter.
-      const envelope = Math.pow(Math.sin(Math.PI * time / duration), 2);
-      const movement = .94 + .06 * Math.sin(time * 18);
-      samples[i] = smoothed * envelope * movement;
-    }
-  } catch { /* Reading continues when audio is unsupported or blocked. */ }
+    const audio = context;
+    if (audio.state === 'suspended') void audio.resume().catch(() => {});
+    recording ??= file.then(bytes => bytes ? audio.decodeAudioData(bytes) : null).catch(() => null);
+  } catch { /* Reading continues if browser audio is unavailable. */ }
 }
 
 export function playPageSound() {
-  if (!context || !paper) return;
+  if (!context || !recording) return;
   const audio = context;
-  const buffer = paper;
-  const play = () => {
-    const source = audio.createBufferSource();
-    const highPass = audio.createBiquadFilter();
-    const lowPass = audio.createBiquadFilter();
-    const volume = audio.createGain();
+  const turn = ++requestedTurn;
+  void Promise.all([recording, audio.resume()]).then(([buffer]) => {
+    if (!buffer || turn !== requestedTurn) return;
     const now = audio.currentTime;
+    // Avoid stacking the 2.4-second recording when pages are turned quickly.
+    if (active) {
+      active.gain.gain.cancelScheduledValues(now);
+      active.gain.gain.setValueAtTime(active.gain.gain.value, now);
+      active.gain.gain.linearRampToValueAtTime(0, now + .025);
+      active.source.stop(now + .03);
+    }
+    const source = audio.createBufferSource();
+    const gain = audio.createGain();
     source.buffer = buffer;
-    source.playbackRate.value = .97 + Math.random() * .06;
-    highPass.type = 'highpass';
-    highPass.frequency.value = 120;
-    highPass.Q.value = .5;
-    lowPass.type = 'lowpass';
-    lowPass.Q.value = .5;
-    lowPass.frequency.setValueAtTime(1600, now);
-    lowPass.frequency.exponentialRampToValueAtTime(850, now + .65);
-    volume.gain.value = .2;
-    source.connect(highPass).connect(lowPass).connect(volume).connect(audio.destination);
-    source.onended = () => { source.disconnect(); highPass.disconnect(); lowPass.disconnect(); volume.disconnect(); };
+    // Preserve the recording's original pitch, timing, and tone.
+    gain.gain.value = .7;
+    source.connect(gain).connect(audio.destination);
+    active = { source, gain };
+    source.onended = () => {
+      source.disconnect();
+      gain.disconnect();
+      if (active?.source === source) active = undefined;
+    };
     source.start();
-  };
-  if (audio.state === 'running') play();
-  else void audio.resume().then(play).catch(() => {});
+  }).catch(() => { /* Audio must never interrupt navigation. */ });
 }

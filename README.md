@@ -37,4 +37,4 @@ npm run convert -- "/absolute/path/to/document.pdf"
 
 The original 137 MB PDF is kept outside this repository. The converter produces 2000-pixel WebP pages and a book manifest in `public/book/`. Edit the manifest's display metadata and dimensions if using a different document.
 
-Page-turn rendering uses StPageFlip (MIT). Audio is generated locally with the Web Audio API; it requires no third-party audio assets. Page images preserve the supplied publication. They are image-based, so the original PDF's selectable text and links are not interactive in this viewer.
+Page-turn rendering uses StPageFlip (MIT). Audio uses the supplied `freesound_community-one-page-book-flip-101928.mp3` recording, served locally as `public/audio/page-flip.mp3` and played through the Web Audio API. Page images preserve the supplied publication. They are image-based, so the original PDF's selectable text and links are not interactive in this viewer.
