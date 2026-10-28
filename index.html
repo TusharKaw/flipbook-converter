@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#e9ebe6" />
+  <meta name="description" content="Vidhan Chetna, August–October 2026. An interactive digital flipbook." />
+  <title>Vidhan Chetna</title>
+</head>
+<body>
+  <main id="stage" aria-label="Flipbook">
+    <div id="book-wrap"><div id="book"></div></div>
+    <div id="loading" role="status"><span class="spinner"></span><span>Opening book…</span></div>
+  </main>
+  <nav class="toolbar" aria-label="Page navigation">
+    <button id="first" aria-label="First page" title="First page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m11 7-5 5 5 5m7-10-5 5 5 5"/></svg></button>
+    <button id="back" aria-label="Previous page" title="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 7-5 5 5 5"/></svg></button>
+    <form id="page-form"><label class="sr-only" for="page-input">Go to page</label><input id="page-input" type="number" inputmode="numeric" min="1" value="1" aria-label="Page number" /><span id="page-total">/ 208</span></form>
+    <button id="forward" aria-label="Next page" title="Next page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 7 5 5-5 5"/></svg></button>
+    <button id="last" aria-label="Last page" title="Last page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 7 5 5-5 5m7-10 5 5-5 5"/></svg></button>
+  </nav>
+  <div id="announcement" class="sr-only" aria-live="polite"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
