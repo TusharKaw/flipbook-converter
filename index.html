@@ -18,7 +18,9 @@
     <form id="page-form"><label class="sr-only" for="page-input">Go to page</label><input id="page-input" type="number" inputmode="numeric" min="1" value="1" aria-label="Page number" /><span id="page-total">/ 208</span></form>
     <button id="forward" aria-label="Next page" title="Next page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 7 5 5-5 5"/></svg></button>
     <button id="last" aria-label="Last page" title="Last page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 7 5 5-5 5m7-10 5 5-5 5"/></svg></button>
+    <button id="audio-book" type="button" aria-label="Start Audio Book" aria-pressed="false" title="Read aloud from this page" disabled><svg class="audio-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-3a8 8 0 0 1 16 0v3M4 13H3v6h4v-6H4Zm16 0h1v6h-4v-6h3Z"/></svg><svg class="stop-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span>Audio Book</span></button>
   </nav>
+  <div id="audio-status" role="status" aria-live="polite" hidden></div>
   <div id="announcement" class="sr-only" aria-live="polite"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>

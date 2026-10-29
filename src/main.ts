@@ -1,6 +1,7 @@
 import './style.css';
 import { PageFlip } from 'page-flip';
 import { unlockPageSound, playPageSound } from './page-sound';
+import { createAudioBook } from './audio-book';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const base = import.meta.env.BASE_URL;
@@ -13,6 +14,11 @@ let count = 208;
 let current = 0;
 let flip: PageFlip;
 let ready = false;
+const lastVisiblePage = () => Math.min(count - 1, current + (flip.getOrientation() === 'landscape' && current > 0 && current < count - 1 ? 1 : 0));
+const audiobook = createAudioBook({
+  page: () => current, lastVisible: lastVisiblePage, count: () => count,
+  next: forward, settled: () => ready && ['read', 'fold_corner'].includes(flip.getState()),
+});
 // Browsers permit audio after a real click, touch, or keyboard gesture.
 document.addEventListener('pointerdown', unlockPageSound, { capture: true });
 document.addEventListener('keydown', unlockPageSound, { capture: true });
@@ -48,11 +54,13 @@ function updatePage() {
   try { localStorage.setItem(storageKey, input.value); } catch { /* Storage can be disabled. */ }
   history.replaceState(null, '', `#page=${current + 1}`);
   loadNearby();
+  audiobook.pageChanged();
 }
 function jump(page: number) {
   if (!ready || !Number.isFinite(page)) return;
   flip.turnToPage(Math.max(0, Math.min(count - 1, Math.round(page) - 1)));
   updatePage();
+  audiobook.pageChanged(Math.max(0, Math.min(count - 1, Math.round(page) - 1)));
 }
 function forward() { if (ready && flip.getState() !== 'flipping') { loadNearby(); flip.flipNext(); } }
 function backward() { if (ready && flip.getState() !== 'flipping') flip.flipPrev(); }
@@ -131,6 +139,7 @@ async function init() {
     flip.on('changeOrientation', () => { if (ready) updatePage(); });
     flip.on('init', () => { ready = true; updatePage(); $('loading').hidden = true; });
     flip.loadFromHTML(document.querySelectorAll<HTMLElement>('#book .page'));
+    void audiobook.load(base);
     // Immediate touch/mouse tracking with pointer capture; no touch-and-hold delay.
     const surface = book.querySelector<HTMLElement>('.stf__block')!;
     let pointer: { id: number; x: number; y: number; time: number } | null = null;
