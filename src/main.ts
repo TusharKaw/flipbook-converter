@@ -14,11 +14,25 @@ let count = 208;
 let current = 0;
 let flip: PageFlip;
 let ready = false;
-const lastVisiblePage = () => Math.min(count - 1, current + (flip.getOrientation() === 'landscape' && current > 0 && current < count - 1 ? 1 : 0));
+let jumping = false;
+
+const firstVisiblePage = () => (ready ? flip.getCurrentPageIndex() : current);
+const isLandscape = () => ready && flip.getOrientation() === 'landscape';
+const lastVisiblePage = () => {
+  if (!ready) return current;
+  const first = flip.getCurrentPageIndex();
+  return Math.min(count - 1, first + (isLandscape() && first > 0 && first < count - 1 ? 1 : 0));
+};
+
 const audiobook = createAudioBook({
-  page: () => current, lastVisible: lastVisiblePage, count: () => count,
-  next: forward, settled: () => ready && ['read', 'fold_corner'].includes(flip.getState()),
+  page: () => current,
+  firstVisible: firstVisiblePage,
+  lastVisible: lastVisiblePage,
+  count: () => count,
+  next: forward,
+  settled: () => ready && ['read', 'fold_corner'].includes(flip.getState()),
 });
+
 // Browsers permit audio after a real click, touch, or keyboard gesture.
 document.addEventListener('pointerdown', unlockPageSound, { capture: true });
 document.addEventListener('keydown', unlockPageSound, { capture: true });
@@ -28,6 +42,7 @@ function savedPage() {
   if (hash) return Number(hash[1]);
   try { return Number(localStorage.getItem(storageKey)) || 1; } catch { return 1; }
 }
+
 function loadNearby() {
   // Bound decoded image memory while preloading both sides of every upcoming turn.
   for (const index of loaded) {
@@ -41,34 +56,62 @@ function loadNearby() {
     if (image) { image.src = imageUrl(index + 1); loaded.add(index); }
   }
 }
-function updatePage() {
-  current = flip.getCurrentPageIndex();
-  const landscape = flip.getOrientation() === 'landscape';
-  $('book-wrap').classList.toggle('cover', current === 0 && landscape);
-  $('book-wrap').classList.toggle('back-cover', current === count - 1 && landscape);
+
+function updatePage(target?: number) {
+  const landscape = isLandscape();
+  const first = firstVisiblePage();
+  const last = lastVisiblePage();
+  if (target !== undefined) {
+    current = target;
+  } else if (current < first || current > last) {
+    current = first;
+  }
+  $('book-wrap').classList.toggle('cover', first === 0 && landscape);
+  $('book-wrap').classList.toggle('back-cover', first === count - 1 && landscape);
   input.value = String(current + 1);
   $('announcement').textContent = `Page ${current + 1} of ${count}`;
-  for (const id of ['back', 'first']) $<HTMLButtonElement>(id).disabled = current === 0;
-  const lastVisible = Math.min(count - 1, current + (landscape && current > 0 && current < count - 1 ? 1 : 0));
-  for (const id of ['forward', 'last']) $<HTMLButtonElement>(id).disabled = lastVisible === count - 1;
+  for (const id of ['back', 'first']) $<HTMLButtonElement>(id).disabled = first === 0;
+  for (const id of ['forward', 'last']) $<HTMLButtonElement>(id).disabled = last === count - 1;
   try { localStorage.setItem(storageKey, input.value); } catch { /* Storage can be disabled. */ }
   history.replaceState(null, '', `#page=${current + 1}`);
   loadNearby();
-  audiobook.pageChanged();
+  audiobook.pageChanged(target);
 }
+
+function targetFromInput(): number {
+  const value = Number(input.value);
+  return Number.isFinite(value) ? Math.max(1, Math.min(count, Math.round(value))) : current + 1;
+}
+
 function jump(page: number) {
   if (!ready || !Number.isFinite(page)) return;
-  flip.turnToPage(Math.max(0, Math.min(count - 1, Math.round(page) - 1)));
-  updatePage();
-  audiobook.pageChanged(Math.max(0, Math.min(count - 1, Math.round(page) - 1)));
+  const target = Math.max(0, Math.min(count - 1, Math.round(page) - 1));
+  current = target;
+  jumping = true;
+  try {
+    flip.turnToPage(target);
+  } finally {
+    jumping = false;
+  }
+  updatePage(target);
 }
+
 function forward() { if (ready && flip.getState() !== 'flipping') { loadNearby(); flip.flipNext(); } }
 function backward() { if (ready && flip.getState() !== 'flipping') flip.flipPrev(); }
+
 $('forward').onclick = forward;
 $('back').onclick = backward;
 $('first').onclick = () => jump(1);
 $('last').onclick = () => jump(count);
-$('page-form').onsubmit = event => { event.preventDefault(); jump(Number(input.value)); input.blur(); };
+$('page-form').onsubmit = event => { event.preventDefault(); jump(targetFromInput()); input.blur(); };
+input.addEventListener('change', () => jump(targetFromInput()));
+$('audio-book').addEventListener('pointerdown', () => {
+  const desired = targetFromInput();
+  if (desired !== current + 1) {
+    jump(desired);
+  }
+}, { capture: true });
+
 window.addEventListener('hashchange', () => jump(savedPage()));
 window.addEventListener('keydown', event => {
   if ((event.target as HTMLElement).matches('input, textarea, select') || event.ctrlKey || event.metaKey || event.altKey) return;
@@ -135,7 +178,7 @@ async function init() {
         playPageSound();
       }
     });
-    flip.on('flip', updatePage);
+    flip.on('flip', () => { if (!jumping) updatePage(); });
     flip.on('changeOrientation', () => { if (ready) updatePage(); });
     flip.on('init', () => { ready = true; updatePage(); $('loading').hidden = true; });
     flip.loadFromHTML(document.querySelectorAll<HTMLElement>('#book .page'));

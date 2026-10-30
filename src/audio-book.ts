@@ -1,5 +1,6 @@
 type Reader = {
   page: () => number;
+  firstVisible?: () => number;
   lastVisible: () => number;
   count: () => number;
   next: () => void;
@@ -31,6 +32,7 @@ export function createAudioBook(reader: Reader) {
   let generation = 0;
   let reading = -1;
   let moving = false;
+  const firstVisible = () => (reader.firstVisible ? reader.firstVisible() : reader.page());
   // Retain the utterance until completion (some engines otherwise collect it).
   let utterance: SpeechSynthesisUtterance | null = null;
   let releaseSpeech: (() => void) | undefined;
@@ -63,7 +65,7 @@ export function createAudioBook(reader: Reader) {
   const valid = (token: number) => active && generation === token;
   async function settle(token: number, previous?: number) {
     const deadline = Date.now() + 6000;
-    while (valid(token) && (!reader.settled() || (previous !== undefined && reader.page() === previous))) {
+    while (valid(token) && (!reader.settled() || (previous !== undefined && firstVisible() === previous))) {
       if (Date.now() > deadline) throw new Error('The page could not turn. Please try Audio Book again.');
       await new Promise(resolve => setTimeout(resolve, 60));
     }
@@ -100,7 +102,7 @@ export function createAudioBook(reader: Reader) {
       reading = start;
       await settle(token);
       if (!valid(token)) return;
-      if (reading < reader.page() || reading > reader.lastVisible()) reading = reader.page();
+      if (reading < firstVisible() || reading > reader.lastVisible()) reading = reader.page();
       // A cover is displayed on its own. Open it before reading page two.
       if (reading === 0 && reader.count() > 1) {
         moving = true;
@@ -108,7 +110,7 @@ export function createAudioBook(reader: Reader) {
         await settle(token, 0);
         if (!valid(token)) return;
         moving = false;
-        reading = reader.page();
+        reading = firstVisible();
       }
       while (valid(token) && reading < reader.count()) {
         const page = reading;
@@ -124,14 +126,14 @@ export function createAudioBook(reader: Reader) {
         reading = page + 1;
         if (reading > reader.lastVisible()) {
           moving = true;
-          const previous = reader.page();
+          const previous = firstVisible();
           await settle(token);
           if (!valid(token)) return;
           reader.next();
           await settle(token, previous);
           if (!valid(token)) return;
           moving = false;
-          reading = reader.page();
+          reading = firstVisible();
         }
       }
     } catch (error) {
@@ -172,7 +174,7 @@ export function createAudioBook(reader: Reader) {
       }
     },
     pageChanged(target?: number) {
-      if (!active || moving || (target === undefined && reading >= reader.page() && reading <= reader.lastVisible())) return;
+      if (!active || moving || (target === undefined && reading >= firstVisible() && reading <= reader.lastVisible())) return;
       generation++;
       cancelSpeech();
       void run(target ?? reader.page(), generation);
